@@ -58,5 +58,28 @@ namespace ChessChallenge.Chess
             return pgn.ToString();
         }
 
+        public static string ChessAnalysis(Board orgBoard)
+        {
+            var startFen = orgBoard.GameStartFen.Replace("\n", "").Replace("\r", "");
+            Move[] moves = orgBoard.AllGameMoves.ToArray();
+            Board board = new Board();
+            board.LoadPosition(startFen);
+            
+            StringBuilder sbMoves = new();
+            for (int plyCount = 0; plyCount < moves.Length; plyCount++)
+            {
+                string moveString = MoveUtility.GetMoveNameSAN(moves[plyCount], board);
+                board.MakeMove(moves[plyCount]);
+
+                if (plyCount % 2 == 0)
+                {
+                    sbMoves.Append((plyCount / 2 + 1) + ". ");
+                }
+                sbMoves.Append(moveString + " ");
+            }
+
+            return $"https://www.chess.com/analysis?pgn=[FEN %22{startFen}%22]{sbMoves.Replace(".", "%2E").Replace(" ", "%20")}&tab=analysis#";
+        }
+
     }
 }

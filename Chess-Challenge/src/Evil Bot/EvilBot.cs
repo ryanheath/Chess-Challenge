@@ -994,7 +994,7 @@ namespace ChessChallenge.Example
         }
     }
 
-    public class EvilBot6 : IChessBot
+    public class EvilBot : IChessBot
     {
         int[] PieceValues = { 0, 100, 320, 330, 500, 900, 10000 };
         int CheckmateScore = 9999;

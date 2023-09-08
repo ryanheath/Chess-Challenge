@@ -3,8 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using ChessChallenge.API;
 
-//class MyBot930 : IChessBot
-class EvilBot : IChessBot
+class MyBot930 : IChessBot
+//class EvilBot : IChessBot
 {
     Board board;
     Timer timer;
@@ -66,7 +66,7 @@ class EvilBot : IChessBot
 
         if (bestMove.MovePieceType is PieceType.Queen or PieceType.Rook)
         {
-            var printMoves = false;
+            //var printMoves = false;
             //board.MakeMove(bestMove);
             if (board.SquareIsAttackedByOpponent(bestMove.TargetSquare))
             {
@@ -74,7 +74,7 @@ class EvilBot : IChessBot
                 Console.ForegroundColor = ConsoleColor.Yellow;
                 Console.WriteLine($"Queen/Rook move was attacked! {bestMove} {bestMove.MovePieceType}");
                 Console.ForegroundColor = color;
-                printMoves = true;
+                //printMoves = true;
             }
             //board.UndoMove(bestMove);
             

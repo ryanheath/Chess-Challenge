@@ -301,10 +301,17 @@ namespace ChessChallenge.Application
 
                 if (log)
                 {
-                    Log("Game Over: " + result, false, ConsoleColor.Blue);
+                    LogNoNewline("Game Over: " + result, false, ConsoleColor.Blue);
+                    if (PlayerWhite.PlayerType == PlayerType.MyBot && result != GameResult.BlackIsMated
+                        || PlayerBlack.PlayerType == PlayerType.MyBot && result != GameResult.WhiteIsMated)
+                    {
+                        LogNoNewline(" Chess analysis: " + PGNCreator.ChessAnalysis(board), false, ConsoleColor.DarkYellow);
+                    }
+                    Log("");
                 }
 
                 string pgn = PGNCreator.CreatePGN(board, result, GetPlayerName(PlayerWhite), GetPlayerName(PlayerBlack));
+                
                 pgns.AppendLine(pgn);
 
                 // If 2 bots playing each other, start next game automatically.

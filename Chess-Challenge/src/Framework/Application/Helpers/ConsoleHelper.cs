@@ -17,5 +17,17 @@ namespace ChessChallenge.Application
             }
         }
 
+        public static void LogNoNewline(string msg, bool isError = false, ConsoleColor col = ConsoleColor.White)
+        {
+            bool log = MessagesToLog == LogType.All || (isError && MessagesToLog == LogType.ErrorOnly);
+
+            if (log)
+            {
+                Console.ForegroundColor = col;
+                Console.Write(msg);
+                Console.ResetColor();
+            }
+        }
+
     }
 }
