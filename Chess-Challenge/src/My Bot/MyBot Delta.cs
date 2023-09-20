@@ -3,13 +3,17 @@ using System.Collections.Generic;
 using System.Linq;
 using ChessChallenge.API;
 
-class MyBot : IChessBot
+class EvilBot : MyBotDelta
+{
+}
+
+class MyBotDelta : IChessBot
 {
     Board board;
     Timer timer;
     Dictionary<ulong, TranspositionTableEntry> transpositionTable;
 
-    public MyBot()
+    public MyBotDelta()
     {
         for (var pv = 0; pv < unPackedPositionValues.Length; pv++)
         {
@@ -18,7 +22,7 @@ class MyBot : IChessBot
                 for (var c = 0; c < 4; c++)
                     unPackedPositionValues[pv][(r + 1) * 8 - c - 1] =
                     unPackedPositionValues[pv][r * 8 + c] = 
-                        (sbyte)(packedPositionValues[pv * 4 + r / 2] >> r % 2 * 32 + c * 8);
+                        (sbyte)(packedPositionValues[pv * 4 + r / 2] >> (r % 2 * 32) + c * 8);
         }
     }
 
@@ -28,10 +32,14 @@ class MyBot : IChessBot
         board = brd;
         timer = tmr;
 
-        for (var depth = 1; ; depth++)
-            if (Search(depth, -5_000_000 /*int.MinValue*/, 5_000_000 /*int.MaxValue*/) is 100_000
+        for (var depth = 1; depth <= 20; depth++)
+            if (Search(depth, -5_000_000 /*int.MinValue*/, 5_000_000 /*int.MaxValue*/) == 100000 
                 || timer.MillisecondsElapsedThisTurn > timer.MillisecondsRemaining/75)
-                    break; // Stop searching if we are running out of time
+            {
+                Console.WriteLine($"reached depth {depth} in {timer.MillisecondsElapsedThisTurn}ms");
+                break; // Stop searching if we are running out of time
+            }
+
         return transpositionTable[board.ZobristKey].move;
     }
 
@@ -39,7 +47,7 @@ class MyBot : IChessBot
     {
         // Perform terminal position evaluation
         if (depth == 0 || board.IsInCheckmate() || board.IsDraw())
-            return QuiescenceSearch(alpha, beta);
+            return QuiescenceSearch(alpha, beta); // Apply quiescence search
 
         // Check transposition table for existing entries
         var hash = board.ZobristKey;
@@ -47,7 +55,7 @@ class MyBot : IChessBot
         {
             if (tt.nodeType == 0 /*NodeType.Exact*/)
                 return tt.score;
-            if (tt.nodeType == -1 /*NodeType.LowerBound*/)
+            else if (tt.nodeType == -1 /*NodeType.LowerBound*/)
                 alpha = Math.Max(alpha, tt.score);
             else if (tt.nodeType == 1 /*NodeType.UpperBound*/)
                 beta = Math.Min(beta, tt.score);
@@ -126,7 +134,7 @@ class MyBot : IChessBot
     int Evaluate()
     {
         if (board.IsInCheckmate())
-            return -100_000;
+            return -100000;
 
         if (board.IsDraw())
             return 0;
@@ -134,49 +142,48 @@ class MyBot : IChessBot
         var totalEvaluation = 0;
 
         // Both sides have no queens or
-        // Every side which has a queen has additionally no other pieces or one minor piece maximum.
-        var bq = HasQueen(false);
-        var wq = HasQueen(true);
-        var endGame = !bq && !wq || bq && HasLessMajorPieces(false) || wq && HasLessMajorPieces(true);
+        // Every side which has a queen has additionally no other pieces or one minorpiece maximum.
+        var (bq, bm) = CountEndGame(false);
+        var (wq, wm) = CountEndGame(true);
+        var endGame = (bq == 0 && wq == 0) || (bq == 1 && bm <= 1) || (wq == 1 && wm <= 1);
+
+        var isMaximizingPlayer = board.IsWhiteToMove;
 
         if (board.IsInCheck())
-            totalEvaluation -= 5 + (8 - board.GetLegalMoves().Count(x => x.MovePieceType == PieceType.King)) * 10;
+            totalEvaluation += -1 * (5 + (8 - board.GetLegalMoves().Count(x => x.MovePieceType == PieceType.King)) * 10);
 
         var lists = board.GetAllPieceLists();
-        foreach (var pieceList in lists)
+        for (var i = 0; i < lists.Length; i++)
         {
-            var pieceType = (int)pieceList.TypeOfPieceInList;
-            var pieceValue = pieceValues[pieceType] + 5;
-            var pieceIsWhite = pieceList.IsWhitePieceList;
-            var multiplier = pieceIsWhite == board.IsWhiteToMove ? 2 : -2;
-            var unPV = unPackedPositionValues[pieceType - (endGame && pieceType is 6 /*PieceType.King*/ ? 0 : 1)];
-            var flip = pieceIsWhite ? 0b111000 : 0;
-            var bonus = endGame && pieceType is 1 /*PieceType.Pawn*/ ? pawnBonus : noBonus;
+            var pieceList = lists[i];
 
             for (var j = 0; j < pieceList.Count; j++)
             {
-                var squareIndex = pieceList[j].Square.Index ^ flip;
-                var value = pieceValue + unPV[squareIndex] + bonus[squareIndex >> 3];
-                totalEvaluation += multiplier * value;
+                var piece = pieceList[j];
+                var pieceValue = pieceValues[(int)piece.PieceType];
+                var squareIndex = piece.Square.Index ^ (piece.IsWhite ? 0b111000 : 0);
+                var positionValue = unPackedPositionValues[(int)piece.PieceType - (endGame && piece.IsKing ? 0 : 1)][squareIndex];
+                if (endGame && piece.IsPawn)
+                    positionValue += pawnBonus[squareIndex >> 3];
+                var value = pieceValue + 5 + positionValue;
+                totalEvaluation -= 2 * -1 * (piece.IsWhite == isMaximizingPlayer ? value : -value);
             }
         }
 
         return totalEvaluation;
-        
-        bool HasQueen(bool isWhite) => board.GetPieceBitboard(PieceType.Queen, isWhite) != 0;
 
-        bool HasLessMajorPieces(bool isWhite) => 
-            BitboardHelper.GetNumberOfSetBits(
+        (int q, int m) CountEndGame(bool isWhite) => 
+            (BitboardHelper.GetNumberOfSetBits(board.GetPieceBitboard(PieceType.Queen, isWhite)),
+                BitboardHelper.GetNumberOfSetBits(
                     board.GetPieceBitboard(PieceType.Bishop, isWhite)
                     | board.GetPieceBitboard(PieceType.Knight, isWhite)
-                    | board.GetPieceBitboard(PieceType.Rook, isWhite)) <= 1;
+                    | board.GetPieceBitboard(PieceType.Rook, isWhite)));
     }
 
     record TranspositionTableEntry(int score, int depth, int /*NodeType*/ nodeType, Move move);
     // enum NodeType { Exact, UpperBound, LowerBound }
-    static readonly short[] pieceValues = { 0, 100, 320, 330, 500, 900, 0 };
-    static readonly sbyte[] pawnBonus = { 0, 80, 50, 30, 20, -30, -50, 0 };
-    static readonly sbyte[] noBonus = { 0, 0, 0, 0, 0, 0, 0, 0 };
+    static readonly short[] pieceValues = new short[] { 0, 100, 320, 330, 500, 900, 0 };
+    static sbyte[] pawnBonus = { 0, 80, 50, 30, 20, -50, -50, 0 };
     static readonly sbyte [][] unPackedPositionValues = new sbyte[7][];
     static readonly ulong [] packedPositionValues = 
     { 
