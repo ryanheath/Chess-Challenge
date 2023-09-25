@@ -13,7 +13,7 @@ class MyBot : IChessBot
     {
         for (var pv = 0; pv < unPackedPositionValues.Length; pv++)
         {
-            unPackedPositionValues[pv] = new sbyte[64];
+            unPackedPositionValues[pv] = new short[64];
             for (var r = 0; r < 8; r++)
                 for (var c = 0; c < 4; c++)
                     unPackedPositionValues[pv][(r + 1) * 8 - c - 1] =
@@ -142,22 +142,22 @@ class MyBot : IChessBot
         if (board.IsInCheck())
             totalEvaluation -= 5 + (8 - board.GetLegalMoves().Count(x => x.MovePieceType == PieceType.King)) * 10;
 
-        var lists = board.GetAllPieceLists();
-        foreach (var pieceList in lists)
+        foreach (var pieceList in board.GetAllPieceLists())
         {
             var pieceType = (int)pieceList.TypeOfPieceInList;
-            var pieceValue = pieceValues[pieceType] + 5;
             var pieceIsWhite = pieceList.IsWhitePieceList;
-            var multiplier = pieceIsWhite == board.IsWhiteToMove ? 2 : -2;
-            var unPV = unPackedPositionValues[pieceType - (endGame && pieceType is 6 /*PieceType.King*/ ? 0 : 1)];
             var flip = pieceIsWhite ? 0b111000 : 0;
+
+            var pieceValue = pieceValues[pieceType];
+            var multiplier = pieceIsWhite == board.IsWhiteToMove ? 1 : -1;
+            var unPV = unPackedPositionValues[pieceType - (endGame && pieceType is 6 /*PieceType.King*/ ? 0 : 1)];
             var bonus = endGame && pieceType is 1 /*PieceType.Pawn*/ ? pawnBonus : noBonus;
 
-            for (var j = 0; j < pieceList.Count; j++)
+            var count = pieceList.Count;
+            for (var j = 0; j < count; j++)
             {
                 var squareIndex = pieceList[j].Square.Index ^ flip;
-                var value = pieceValue + unPV[squareIndex] + bonus[squareIndex >> 3];
-                totalEvaluation += multiplier * value;
+                totalEvaluation += multiplier * (pieceValue + unPV[squareIndex] + bonus[squareIndex >> 3]);
             }
         }
 
@@ -174,10 +174,10 @@ class MyBot : IChessBot
 
     record TranspositionTableEntry(int score, int depth, int /*NodeType*/ nodeType, Move move);
     // enum NodeType { Exact, UpperBound, LowerBound }
-    static readonly short[] pieceValues = { 0, 100, 320, 330, 500, 900, 0 };
-    static readonly sbyte[] pawnBonus = { 0, 80, 50, 30, 20, -30, -50, 0 };
-    static readonly sbyte[] noBonus = { 0, 0, 0, 0, 0, 0, 0, 0 };
-    static readonly sbyte [][] unPackedPositionValues = new sbyte[7][];
+    static readonly short[] pieceValues = { 0, 200, 640, 660, 1000, 1800, 0 };
+    static readonly short[] pawnBonus = { 0, 160, 100, 60, 40, -60, -100, 0 };
+    static readonly short[] noBonus = { 0, 0, 0, 0, 0, 0, 0, 0 };
+    static readonly short [][] unPackedPositionValues = new short[7][];
     static readonly ulong [] packedPositionValues = 
     { 
         // pawns
