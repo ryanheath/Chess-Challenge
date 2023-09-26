@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Numerics;
 using ChessChallenge.API;
 
 class MyBot : IChessBot
@@ -142,22 +143,36 @@ class MyBot : IChessBot
         if (board.IsInCheck())
             totalEvaluation -= 5 + (8 - board.GetLegalMoves().Count(x => x.MovePieceType == PieceType.King)) * 10;
 
-        foreach (var pieceList in board.GetAllPieceLists())
+        var multiplier = board.IsWhiteToMove ? 1 : -1;
+
+        for(var pieceType = 1 /* Pawn */; pieceType <= 6 /* King */; pieceType++)
         {
-            var pieceType = (int)pieceList.TypeOfPieceInList;
-            var pieceIsWhite = pieceList.IsWhitePieceList;
-            var flip = pieceIsWhite ? 0b111000 : 0;
+            var pieceTypeEnum = (PieceType)pieceType;
+            var whiteBoard = board.GetPieceBitboard(pieceTypeEnum, true);
+            var blackBoard = board.GetPieceBitboard(pieceTypeEnum, false);
 
-            var pieceValue = pieceValues[pieceType];
-            var multiplier = pieceIsWhite == board.IsWhiteToMove ? 1 : -1;
-            var unPV = unPackedPositionValues[pieceType - (endGame && pieceType is 6 /*PieceType.King*/ ? 0 : 1)];
-            var bonus = endGame && pieceType is 1 /*PieceType.Pawn*/ ? pawnBonus : noBonus;
+            var whiteCount = BitOperations.PopCount(whiteBoard);
+            var blackCount = BitOperations.PopCount(blackBoard);
 
-            var count = pieceList.Count;
-            for (var j = 0; j < count; j++)
+            if (whiteCount == 0 && blackCount == 0) continue;
+            
+            totalEvaluation += multiplier * pieceValues[pieceType] * (whiteCount - blackCount);
+
+            var unPV = unPackedPositionValues[pieceType - (endGame && pieceTypeEnum is PieceType.King ? 0 : 1)];
+            var bonus = endGame && pieceTypeEnum is PieceType.Pawn ? pawnBonus : noBonus;
+
+            while (whiteBoard != 0)
             {
-                var squareIndex = pieceList[j].Square.Index ^ flip;
-                totalEvaluation += multiplier * (pieceValue + unPV[squareIndex] + bonus[squareIndex >> 3]);
+                var squareIndex = BitOperations.TrailingZeroCount(whiteBoard) ^ 0b111000;
+                totalEvaluation += multiplier * (unPV[squareIndex] + bonus[squareIndex >> 3]);
+                whiteBoard &= whiteBoard - 1;
+            }
+
+            while (blackBoard != 0)
+            {
+                var squareIndex = BitOperations.TrailingZeroCount(blackBoard);
+                totalEvaluation -= multiplier * (unPV[squareIndex] + bonus[squareIndex >> 3]);
+                blackBoard &= blackBoard - 1;
             }
         }
 
@@ -166,7 +181,7 @@ class MyBot : IChessBot
         bool HasQueen(bool isWhite) => board.GetPieceBitboard(PieceType.Queen, isWhite) != 0;
 
         bool HasLessMajorPieces(bool isWhite) => 
-            BitboardHelper.GetNumberOfSetBits(
+            BitOperations.PopCount(
                     board.GetPieceBitboard(PieceType.Bishop, isWhite)
                     | board.GetPieceBitboard(PieceType.Knight, isWhite)
                     | board.GetPieceBitboard(PieceType.Rook, isWhite)) <= 1;
